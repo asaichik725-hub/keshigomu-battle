@@ -183,6 +183,14 @@
     0%{ transform:scale(0.45); opacity:0.85; }
     100%{ transform:scale(1.6); opacity:0; }
   }
+  .manga-flash svg.wind{
+    position:absolute; left:-100px; top:-100px; width:200px; height:200px; z-index:-1;
+    animation: windGust .55s ease-out forwards;
+  }
+  @keyframes windGust{
+    0%{ transform:scale(0.7) rotate(-6deg); opacity:0.95; }
+    100%{ transform:scale(1.25) rotate(3deg); opacity:0; }
+  }
   .manga-burst{
     position:absolute; left:0; top:0;
     transform:translate(-50%,-50%) rotate(-4deg) scale(0.3);
@@ -256,7 +264,10 @@
       <canvas id="board"></canvas>
       <div id="endOverlay">
         <h2 id="winnerText">P1のかち!</h2>
-        <button class="big-btn" id="restartBtn">もういちど</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+          <button class="big-btn" id="restartBtn">もういちど</button>
+          <button class="big-btn" id="restartFreshBtn" style="background:var(--paper); color:var(--ink);">はじめから</button>
+        </div>
       </div>
     </div>
     <div id="hint">自分の消しゴムを指で引っぱって離す</div>
@@ -292,8 +303,8 @@ const SPECIALS = {
     big:   { key:'big',   name:'超BIG消し', cost:6, targetScale:3.0 }
   },
   stapler: {
-    small: { key:'small', name:'台風消し',   cost:3, pct:0.81, mode:'contact' },
-    big:   { key:'big',   name:'超台風消し', cost:6, pct:0.54, mode:'field' }
+    small: { key:'small', name:'台風消し',   cost:3, pct:0.729, mode:'contact' },
+    big:   { key:'big',   name:'超台風消し', cost:6, pct:0.486, mode:'field' }
   },
   sandpaper: {
     small: { key:'small', name:'黒穴消し',   cost:3, holeCount:1 },
@@ -406,6 +417,10 @@ document.getElementById('quitBtn').onclick = ()=>{
   location.reload();
 };
 document.getElementById('restartBtn').onclick = ()=>{
+  document.getElementById('endOverlay').classList.remove('show');
+  initGame();
+};
+document.getElementById('restartFreshBtn').onclick = ()=>{
   location.reload();
 };
 
@@ -423,8 +438,12 @@ let winner = null;
 let attackerId = null;      // eraser id whose turn action is currently resolving
 let hitOpponentsThisTurn = new Set();
 let settleStartTime = 0;
+let fallCheckInterval = null;
+let inputAttached = false;
 
 function initGame(){
+  dragging = null;
+  inputLocked = false;
   const wrap = document.getElementById('canvasWrap');
   const maxW = Math.min(780, window.innerWidth*0.95);
   const maxH = Math.min(640, window.innerHeight*0.68);
@@ -509,9 +528,10 @@ function initGame(){
     });
   });
 
-  attachInput();
+  if(!inputAttached){ attachInput(); inputAttached = true; }
   requestAnimationFrame(loop);
-  setInterval(checkFallen, 90);
+  if(fallCheckInterval) clearInterval(fallCheckInterval);
+  fallCheckInterval = setInterval(checkFallen, 90);
 }
 
 function layoutPositions(n, w, h){
@@ -901,7 +921,7 @@ function useSpecial(cur, tier){
     return true;
   } else if(cur.part==='stapler'){
     typhoonBlast(cur, spec.pct, spec.mode);
-    triggerManga(spec.name, {x:cur.body.position.x, y:cur.body.position.y});
+    triggerManga(spec.name, {x:cur.body.position.x, y:cur.body.position.y}, tier==='small' ? 'windSmall' : 'windBig');
   } else if(cur.part==='sandpaper'){
     createHoles(cur, spec.holeCount);
     triggerManga(spec.name, {x:cur.body.position.x, y:cur.body.position.y});
@@ -1119,6 +1139,23 @@ function burstPath(w, h, spikes){
   return d + 'Z';
 }
 
+function windLines(count, rMin, rMax, strokeW){
+  let s = '';
+  for(let i=0;i<count;i++){
+    const a = Math.random()*Math.PI*2;
+    const r1 = rMin + Math.random()*(rMax-rMin)*0.35;
+    const r2 = r1 + (rMax-rMin)*0.55 + Math.random()*(rMax-rMin)*0.25;
+    const x1 = 100+Math.cos(a)*r1, y1 = 100+Math.sin(a)*r1;
+    const x2 = 100+Math.cos(a)*r2, y2 = 100+Math.sin(a)*r2;
+    const perp = a + Math.PI/2;
+    const bow = 8 + Math.random()*14;
+    const cx = (x1+x2)/2 + Math.cos(perp)*bow;
+    const cy = (y1+y2)/2 + Math.sin(perp)*bow;
+    s += `<path d="M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="#1a1a1a" stroke-width="${strokeW}" fill="none" opacity="0.55" stroke-linecap="round"/>`;
+  }
+  return s;
+}
+
 function triggerManga(text, pos, kind='hit'){
   const wrap = document.getElementById('canvasWrap');
   const flash = document.createElement('div');
@@ -1144,6 +1181,10 @@ function triggerManga(text, pos, kind='hit'){
       <circle cx="86" cy="76" r="12" fill="rgba(26,26,26,0.07)"/>
       <circle cx="114" cy="74" r="13" fill="rgba(26,26,26,0.07)"/>
     </svg>`;
+  } else if(kind==='windSmall'){
+    bgHTML = `<svg class="wind" viewBox="0 0 200 200">${windLines(6, 26, 62, 2)}</svg>`;
+  } else if(kind==='windBig'){
+    bgHTML = `<svg class="wind" viewBox="0 0 200 200">${windLines(15, 18, 98, 2.5)}</svg>`;
   }
 
   const bw = Math.max(120, text.length*28), bh = 76;
