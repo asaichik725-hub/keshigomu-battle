@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>消しゴム合戦</title>
+<link href="https://fonts.googleapis.com/css2?family=Yomogi&family=Zen+Kurenaido&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --paper:#f7f5ef;
+    --paper-shadow:#e7e3d6;
+    --accent:#b23a2e;
+    --gray-tone:#9a978d;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--paper);
+    font-family:'Zen Kurenaido', sans-serif;
+    color:var(--ink);
+    overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+  }
+  #app{
+    position:relative;
+    width:100vw; height:100vh; /* フォールバック(古いブラウザ用) */
+    height:100svh;
+    height:100dvh;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+  }
+  .screen{
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    width:100%; height:100%;
+    padding:16px;
+  }
+  .screen.active{ display:flex; }
+
+  h1.title{
+    font-family:'Yomogi', cursive;
+    font-size:clamp(28px,7vw,54px);
+    letter-spacing:2px;
+    margin:6px 0 2px 0;
+    transform:rotate(-1deg);
+  }
+  .sub{
+    font-size:13px; color:#555; margin-bottom:14px;
+  }
+
+  /* --- setup screen --- */
+  .setup-box{
+    background:var(--paper);
+    border:2px solid var(--ink);
+    border-radius:6px;
+    padding:14px 18px;
+    width:min(560px,94vw);
+    max-height:78vh;
+    overflow-y:auto;
+    box-shadow:4px 4px 0 var(--ink);
+  }
+  .player-row{
+    display:flex; align-items:center; gap:8px;
+    border-top:1.5px dashed #999;
+    padding:8px 0;
+  }
+  .player-row:first-child{ border-top:none; }
+  .player-tag{
+    font-family:'Yomogi', cursive;
+    font-size:18px; width:54px; flex-shrink:0;
+  }
+  select, button{
+    font-family:'Zen Kurenaido', sans-serif;
+    font-size:13px;
+    border:1.5px solid var(--ink);
+    border-radius:4px;
+    background:var(--paper);
+    padding:5px 7px;
+    cursor:pointer;
+  }
+  select{ flex:1; min-width:0; }
+  .part-desc{
+    font-size:11px; color:#666; width:100%; margin-top:2px; line-height:1.4;
+  }
+  .part-stats{
+    width:100%; margin-top:4px;
+    font-size:11px; line-height:1.6;
+    display:grid; grid-template-columns:auto 1fr; gap:0 8px;
+  }
+  .part-stats .stat-label{ color:#555; white-space:nowrap; }
+  .part-stats .stat-pips{ letter-spacing:1px; }
+  .count-row{ display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .count-row button{ width:34px; height:34px; font-size:16px; }
+  .big-btn{
+    margin-top:14px;
+    font-family:'Yomogi', cursive;
+    font-size:20px;
+    padding:10px 26px;
+    background:var(--ink);
+    color:var(--paper);
+    box-shadow:3px 3px 0 var(--accent);
+    transition:transform .05s;
+  }
+  .big-btn:active{ transform:translate(2px,2px); box-shadow:1px 1px 0 var(--accent); }
+
+  /* --- game screen --- */
+  #hud{
+    width:100%; max-width:780px;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:4px 8px 8px 8px;
+    font-size:13px;
+  }
+  #turnLabel{
+    font-family:'Yomogi', cursive;
+    font-size:20px;
+  }
+  #canvasWrap{
+    position:relative;
+    border:3px solid var(--ink);
+    border-radius:4px;
+    box-shadow:5px 5px 0 rgba(0,0,0,0.15);
+    touch-action:none;
+  }
+  canvas{ display:block; background:var(--paper); }
+
+  #hint{
+    margin-top:8px; font-size:12px; color:#666; text-align:center; min-height:16px;
+  }
+  #bpRow{
+    width:100%; max-width:780px;
+    display:flex; flex-wrap:wrap; gap:2px 16px;
+    justify-content:center;
+    font-size:11px; color:#555;
+    padding:0 8px 4px 8px;
+  }
+  #bpRow .bp-pips{ letter-spacing:1px; color:#1a1a1a; }
+  #specialBar{
+    margin-top:8px;
+    display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+    min-height:34px;
+  }
+  #specialBar button{
+    font-family:'Yomogi', cursive;
+    font-size:14px;
+    padding:6px 14px;
+    background:var(--paper);
+    border:2px solid var(--ink);
+    box-shadow:2px 2px 0 var(--accent);
+  }
+  #specialBar button:disabled{
+    opacity:0.35; box-shadow:none; cursor:default;
+  }
+
+  /* manga burst overlay */
+  .manga-flash{
+    position:absolute;
+    width:1px; height:1px;
+    pointer-events:none;
+    opacity:0;
+    z-index:20;
+  }
+  .manga-flash.show{
+    animation: mangaPop .55s ease-out forwards;
+  }
+  @keyframes mangaPop{
+    0%{ opacity:0; }
+    8%{ opacity:1; }
+    70%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+  .manga-flash svg.rays{
+    position:absolute; left:-100px; top:-100px; width:200px; height:200px; z-index:-1;
+  }
+  .manga-flash svg.smoke{
+    position:absolute; left:-100px; top:-100px; width:200px; height:200px; z-index:-1;
+    animation: smokePuff .55s ease-out forwards;
+  }
+  @keyframes smokePuff{
+    0%{ transform:scale(0.45); opacity:0.85; }
+    100%{ transform:scale(1.6); opacity:0; }
+  }
+  .manga-burst{
+    position:absolute; left:0; top:0;
+    transform:translate(-50%,-50%) rotate(-4deg) scale(0.3);
+    animation: burstPop .55s cubic-bezier(.2,1.6,.4,1) forwards;
+  }
+  @keyframes burstPop{
+    0%{ transform:translate(-50%,-50%) rotate(-4deg) scale(0.3); }
+    40%{ transform:translate(-50%,-50%) rotate(-3deg) scale(1.15); }
+    100%{ transform:translate(-50%,-50%) rotate(-3deg) scale(1); }
+  }
+  .manga-burst svg{ display:block; }
+  .manga-burst .manga-text{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    font-family:'Yomogi', cursive;
+    font-size:clamp(18px,4.6vw,30px);
+    white-space:nowrap;
+    color:#1a1a1a;
+  }
+
+  #endOverlay{
+    position:absolute; inset:0;
+    background:rgba(247,245,239,0.96);
+    display:none;
+    flex-direction:column;
+    align-items:center; justify-content:center;
+    z-index:30;
+    text-align:center;
+  }
+  #endOverlay.show{ display:flex; }
+  #endOverlay h2{
+    font-family:'Yomogi', cursive;
+    font-size:clamp(30px,8vw,56px);
+    transform:rotate(-2deg);
+    margin-bottom:6px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SETUP SCREEN -->
+  <div class="screen active" id="setupScreen">
+    <h1 class="title">消しゴム合戦</h1>
+    <div class="sub">机の上のサバイバル・スリングショット対戦</div>
+    <div class="setup-box">
+      <div class="count-row">
+        <b style="font-size:13px;">プレイヤー人数</b>
+        <button id="countMinus">−</button>
+        <span id="countLabel" style="font-size:16px; width:20px; text-align:center;">2</span>
+        <button id="countPlus">＋</button>
+      </div>
+      <div class="count-row" style="margin-bottom:14px;">
+        <b style="font-size:13px;">ステージ</b>
+        <select id="stageSelect" style="flex:1;"></select>
+      </div>
+      <div id="playerList"></div>
+      <div style="text-align:center;">
+        <button class="big-btn" id="startBtn">対戦開始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div class="screen" id="gameScreen">
+    <div id="hud">
+      <div id="turnLabel">P1のばん</div>
+      <button id="quitBtn" style="font-size:11px;">← やめる</button>
+    </div>
+    <div id="bpRow"></div>
+    <div id="canvasWrap">
+      <canvas id="board"></canvas>
+      <div id="endOverlay">
+        <h2 id="winnerText">P1のかち!</h2>
+        <button class="big-btn" id="restartBtn">もういちど</button>
+      </div>
+    </div>
+    <div id="hint">自分の消しゴムを指で引っぱって離す</div>
+    <div id="specialBar"></div>
+  </div>
+
+</div>
+
+<script>
+const { Engine, World, Bodies, Body, Vector, Events, Query } = Matter;
+
+/* ---------------- CONFIG ---------------- */
+const PARTS = {
+  none:      { label:'なし',            pips:{control:3,speed:3,weight:3,friction:3}, desc:'標準。バランス型。' },
+  stapler:   { label:'ホッチキス(背面)', pips:{control:6,speed:5,weight:5,friction:2}, desc:'操作性・速さ・重さすべて高く、まっすぐ重い一撃を飛ばせる。摩擦が低く踏ん張りは効かない。' },
+  sandpaper: { label:'紙やすり(底面)',   pips:{control:1,speed:1,weight:2,friction:5}, desc:'摩擦は強いが軽く遅い。操作性が低くほとんど狙った方向に飛ばない。' }
+};
+function pipStr(n, total=6){ return '●'.repeat(n) + '◯'.repeat(total-n); }
+function deriveStats(pips){
+  const c = pips.control/6, s = pips.speed/6, w = pips.weight/6, f = pips.friction/6;
+  return {
+    frictionAir: 0.008 + f*0.082,   // 摩擦: 高いほどすぐ止まる
+    density: 0.0007 + w*0.0013,     // 重さ: 高いほど吹っ飛びにくい/動かしにくい
+    kick: 0.7 + s*0.6,              // 速さ: 発射力の倍率
+    inaccuracy: 0.5*(1-c)           // 操作性: 低いほど狙った方向から曲がる(ラジアン)
+  };
+}
+
+const BLAST_MAX = 0.15; // 必殺技の吹き飛ばし基準威力
+const SPECIALS = {
+  none: {
+    small: { key:'small', name:'BIG消し',   cost:3, targetScale:1.5 },
+    big:   { key:'big',   name:'超BIG消し', cost:6, targetScale:3.0 }
+  },
+  stapler: {
+    small: { key:'small', name:'台風消し',   cost:3, pct:0.81, mode:'contact' },
+    big:   { key:'big',   name:'超台風消し', cost:6, pct:0.54, mode:'field' }
+  },
+  sandpaper: {
+    small: { key:'small', name:'黒穴消し',   cost:3, holeCount:1 },
+    big:   { key:'big',   name:'超黒穴消し', cost:6, holeCount:3 }
+  }
+};
+const ERASER_STYLE = [
+  { corner:4,  worn:false, cover:false }, // P1: まっさらなシンプルな四角い消しゴム
+  { corner:11, worn:true,  cover:false }, // P2: 角丸・使用済み
+  { corner:11, worn:true,  cover:true  }, // P3: 角丸・使用済み・カバー付き(開封済み)
+  { corner:6,  worn:false, cover:true  }  // P4: カバー付き・未使用(封が閉じたまま)
+];
+const HOLE_STYLE = [
+  { rim:'solid',  fill:'solid' }, // P1の穴: シンプル
+  { rim:'dashed', fill:'solid' }, // P2の穴: 円周が点線
+  { rim:'white',  fill:'solid' }, // P3の穴: 円周が白線
+  { rim:'solid',  fill:'hatch' }  // P4の穴: 中が斜線
+];
+
+const STAGES = {
+  plain: { label:'まっさらな机', obstacles: [] },
+  ruler: {
+    label:'定規と鉛筆',
+    obstacles: [
+      { type:'triangle', fx:0.28, fy:0.30, angle:0.35, size:1.0 },
+      { type:'pencil',   fx:0.72, fy:0.68, angle:-0.55, size:1.0 }
+    ]
+  },
+  cluttered: {
+    label:'文房具まみれ',
+    obstacles: [
+      { type:'triangle', fx:0.22, fy:0.24, angle:0.15, size:0.85 },
+      { type:'pencil',   fx:0.78, fy:0.28, angle:1.05, size:1.0 },
+      { type:'pencil',   fx:0.28, fy:0.74, angle:-0.3, size:0.85 },
+      { type:'triangle', fx:0.74, fy:0.76, angle:-0.8, size:0.8 },
+      { type:'pencil',   fx:0.5,  fy:0.5,  angle:0.5, size:0.65 }
+    ]
+  }
+};
+let currentStage = 'plain';
+
+let numPlayers = 2;
+let playerConfigs = []; // {isCPU, part}
+
+/* ---------------- SETUP UI ---------------- */
+const playerListEl = document.getElementById('playerList');
+const countLabel = document.getElementById('countLabel');
+
+function renderStatPips(partKey){
+  const p = PARTS[partKey].pips;
+  const rows = [['操作性','control'],['速さ','speed'],['重さ','weight'],['摩擦','friction']];
+  return rows.map(([label,key])=>`<div class="stat-label">${label}</div><div class="stat-pips">${pipStr(p[key])}</div>`).join('');
+}
+
+function renderPlayerList(){
+  playerListEl.innerHTML = '';
+  playerConfigs = playerConfigs.slice(0, numPlayers);
+  while(playerConfigs.length < numPlayers){
+    playerConfigs.push({ isCPU: playerConfigs.length >= 1, part:'none' });
+  }
+  playerConfigs.forEach((cfg, i)=>{
+    const row = document.createElement('div');
+    row.className = 'player-row';
+    row.innerHTML = `
+      <div class="player-tag">P${i+1}</div>
+      <select data-i="${i}" data-role="type">
+        <option value="human" ${!cfg.isCPU?'selected':''}>ひと</option>
+        <option value="cpu" ${cfg.isCPU?'selected':''}>CPU</option>
+      </select>
+      <select data-i="${i}" data-role="part">
+        ${Object.entries(PARTS).map(([k,v])=>`<option value="${k}" ${cfg.part===k?'selected':''}>${v.label}</option>`).join('')}
+      </select>
+      <div class="part-desc" id="desc-${i}">${PARTS[cfg.part].desc}</div>
+      <div class="part-stats" id="stats-${i}">${renderStatPips(cfg.part)}</div>
+    `;
+    playerListEl.appendChild(row);
+  });
+  playerListEl.querySelectorAll('select').forEach(sel=>{
+    sel.addEventListener('change', (e)=>{
+      const i = +e.target.dataset.i;
+      const role = e.target.dataset.role;
+      if(role==='type') playerConfigs[i].isCPU = e.target.value==='cpu';
+      if(role==='part'){
+        playerConfigs[i].part = e.target.value;
+        document.getElementById('desc-'+i).textContent = PARTS[e.target.value].desc;
+        document.getElementById('stats-'+i).innerHTML = renderStatPips(e.target.value);
+      }
+    });
+  });
+}
+document.getElementById('countMinus').onclick = ()=>{ if(numPlayers>2){ numPlayers--; countLabel.textContent=numPlayers; renderPlayerList(); } };
+document.getElementById('countPlus').onclick = ()=>{ if(numPlayers<4){ numPlayers++; countLabel.textContent=numPlayers; renderPlayerList(); } };
+renderPlayerList();
+
+const stageSelectEl = document.getElementById('stageSelect');
+Object.entries(STAGES).forEach(([k,v])=>{
+  const opt = document.createElement('option');
+  opt.value = k; opt.textContent = v.label;
+  stageSelectEl.appendChild(opt);
+});
+stageSelectEl.value = currentStage;
+stageSelectEl.addEventListener('change', ()=>{ currentStage = stageSelectEl.value; });
+
+document.getElementById('startBtn').onclick = ()=>{
+  document.getElementById('setupScreen').classList.remove('active');
+  document.getElementById('gameScreen').classList.add('active');
+  requestAnimationFrame(()=> initGame());
+};
+document.getElementById('quitBtn').onclick = ()=>{
+  location.reload();
+};
+document.getElementById('restartBtn').onclick = ()=>{
+  location.reload();
+};
+
+/* ---------------- GAME ---------------- */
+let engine, world, canvas, ctx, W, H;
+let deskMargin = 26;
+let erasers = []; // {body, id, part, isCPU, alive, jitterSeed, bp, scale}
+let obstacles = []; // {body, type, size}
+let holes = []; // {x,y,r,ownerId}
+let currentTurn = 0;
+let awaitingSettle = false;
+let inputLocked = false;
+let dragging = null; // {eraser, startX, startY}
+let winner = null;
+let attackerId = null;      // eraser id whose turn action is currently resolving
+let hitOpponentsThisTurn = new Set();
+let settleStartTime = 0;
+
+function initGame(){
+  const wrap = document.getElementById('canvasWrap');
+  const maxW = Math.min(780, window.innerWidth*0.95);
+  const maxH = Math.min(640, window.innerHeight*0.68);
+  W = maxW; H = maxH;
+  canvas = document.getElementById('board');
+  canvas.width = W; canvas.height = H;
+  ctx = canvas.getContext('2d');
+  deskBorderPts = null;
+
+  engine = Engine.create();
+  engine.gravity.y = 0;
+  world = engine.world;
+
+  erasers = [];
+  obstacles = [];
+  holes = [];
+  const positions = layoutPositions(numPlayers, W, H);
+  for(let i=0;i<numPlayers;i++){
+    const part = PARTS[playerConfigs[i].part];
+    const stats = deriveStats(part.pips);
+    const body = Bodies.rectangle(positions[i].x, positions[i].y, 46, 26, {
+      frictionAir: stats.frictionAir,
+      friction: 0.09,
+      restitution: 0.38,
+      density: stats.density,
+      angle: positions[i].angle,
+      label: 'eraser'+i
+    });
+    World.add(world, body);
+    erasers.push({
+      body, id:i, part: playerConfigs[i].part, kick: stats.kick, inaccuracy: stats.inaccuracy,
+      isCPU: playerConfigs[i].isCPU, alive:true, seed: Math.random()*1000, bp:0, scale:1,
+      baseMass: body.mass, atkMult: 1, bigStage: 0
+    });
+  }
+
+  currentTurn = 0;
+  winner = null;
+  inputLocked = false;
+  awaitingSettle = false;
+  updateTurnLabel();
+
+  createObstacles();
+
+  Events.on(engine, 'collisionStart', (e)=>{
+    e.pairs.forEach(p=>{
+      const rel = Vector.magnitude(Vector.sub(p.bodyA.velocity, p.bodyB.velocity));
+      if(rel > 3.5){
+        const mid = Vector.add(p.bodyA.position, p.bodyB.position);
+        mid.x/=2; mid.y/=2;
+        triggerManga(pick(['ガツン!','ゴッ!','バキッ!']), mid);
+      }
+      // BP: 攻撃中の消しゴムが「別プレイヤー」の消しゴムに当たったら+1(1ターン1相手まで)
+      if(attackerId !== null && p.bodyA.label && p.bodyB.label &&
+         p.bodyA.label.startsWith('eraser') && p.bodyB.label.startsWith('eraser')){
+        const aId = +p.bodyA.label.replace('eraser','');
+        const bId = +p.bodyB.label.replace('eraser','');
+        let otherId = null;
+        if(aId===attackerId && bId!==attackerId) otherId = bId;
+        else if(bId===attackerId && aId!==attackerId) otherId = aId;
+        if(otherId!==null && !hitOpponentsThisTurn.has(otherId)){
+          hitOpponentsThisTurn.add(otherId);
+          const attacker = erasers[attackerId];
+          if(attacker && attacker.alive){
+            attacker.bp = Math.min(6, attacker.bp+1);
+            // BIG消し等で attackerの atkMult が上がっていたら追加の吹き飛ばしを与える
+            if(attacker.atkMult > 1){
+              const target = erasers[otherId];
+              if(target && target.alive){
+                const dx = target.body.position.x - attacker.body.position.x;
+                const dy = target.body.position.y - attacker.body.position.y;
+                const dist = Math.hypot(dx,dy) || 1;
+                const extra = (attacker.atkMult - 1) * 0.05;
+                Body.applyForce(target.body, target.body.position, {
+                  x:(dx/dist)*extra, y:(dy/dist)*extra
+                });
+              }
+            }
+          }
+        }
+      }
+    });
+  });
+
+  attachInput();
+  requestAnimationFrame(loop);
+  setInterval(checkFallen, 90);
+}
+
+function layoutPositions(n, w, h){
+  const cx=w/2, cy=h/2, r=Math.min(w,h)*0.30;
+  const pos=[];
+  for(let i=0;i<n;i++){
+    const ang = -Math.PI/2 + i*(2*Math.PI/n);
+    pos.push({ x: cx+r*Math.cos(ang), y: cy+r*Math.sin(ang), angle: ang+Math.PI/2 });
+  }
+  return pos;
+}
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function createObstacles(){
+  const stage = STAGES[currentStage] || STAGES.plain;
+  const innerX = deskMargin+30, innerY = deskMargin+30;
+  const innerW = W-deskMargin*2-60, innerH = H-deskMargin*2-60;
+  stage.obstacles.forEach(o=>{
+    const x = innerX + o.fx*innerW;
+    const y = innerY + o.fy*innerH;
+    let body;
+    if(o.type==='triangle'){
+      const r = 34*o.size;
+      body = Bodies.polygon(x, y, 3, r, {
+        isStatic:false, angle:o.angle,
+        density:0.0055, frictionAir:0.18, friction:0.25, restitution:0.35
+      });
+    } else { // pencil
+      const len = 130*o.size, wid = 15*o.size;
+      body = Bodies.rectangle(x, y, len, wid, {
+        isStatic:false, angle:o.angle,
+        density:0.0055, frictionAir:0.18, friction:0.25, restitution:0.35,
+        chamfer:{radius:wid/2*0.6}
+      });
+    }
+    World.add(world, body);
+    obstacles.push({ body, type:o.type, size:o.size });
+  });
+}
+
+function drawObstacles(){
+  obstacles.forEach(o=>{
+    const b = o.body;
+    ctx.save();
+    ctx.translate(b.position.x, b.position.y);
+    ctx.rotate(b.angle);
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.fillStyle = 'rgba(26,26,26,0.05)';
+    ctx.lineWidth = 2;
+    if(o.type==='triangle'){
+      const r = 34*o.size;
+      const theta = 2*Math.PI/3, off = theta*0.5;
+      const verts = [0,1,2].map(i=>{
+        const a = off + i*theta;
+        return { x:r*Math.cos(a), y:r*Math.sin(a) };
+      });
+      for(let pass=0; pass<2; pass++){
+        ctx.beginPath();
+        verts.forEach((v,idx)=>{
+          const jx = v.x + (pass?0.8:0), jy = v.y + (pass?0.6:0);
+          if(idx===0) ctx.moveTo(jx,jy); else ctx.lineTo(jx,jy);
+        });
+        ctx.closePath();
+        if(pass===0) ctx.fill();
+        ctx.stroke();
+      }
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(0,-2,4,0,7); ctx.stroke();
+    } else {
+      const len = 130*o.size, wid = 15*o.size;
+      for(let pass=0; pass<2; pass++){
+        ctx.beginPath();
+        roundRectPath(-len/2+pass*0.7, -wid/2+pass*0.5, len*0.8, wid, wid/2*0.6);
+        if(pass===0) ctx.fill();
+        ctx.stroke();
+      }
+      // sharpened tip
+      ctx.beginPath();
+      ctx.moveTo(len*0.3, -wid/2);
+      ctx.lineTo(len/2+10*o.size, 0);
+      ctx.lineTo(len*0.3, wid/2);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(26,26,26,0.08)';
+      ctx.fill();
+      ctx.stroke();
+      // graphite point
+      ctx.beginPath();
+      ctx.moveTo(len*0.44, -wid*0.18);
+      ctx.lineTo(len/2+10*o.size, 0);
+      ctx.lineTo(len*0.44, wid*0.18);
+      ctx.closePath();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+/* ---- rendering: hand-drawn monochrome ---- */
+function jitterPoint(x,y,amt,seed){
+  return {
+    x: x + (Math.sin(seed*12.9898+x*0.7)*43758.5453 % 1)*amt,
+    y: y + (Math.sin(seed*78.233+y*0.9)*24634.6345 % 1)*amt
+  };
+}
+
+let deskBorderPts = null;
+
+function generateDeskBorder(x,y,w,h,jit){
+  const pts = [[x,y],[x+w,y],[x+w,y+h],[x,y+h],[x,y]];
+  return pts.map(p=>({
+    x: p[0] + (Math.random()-0.5)*jit*0.3,
+    y: p[1] + (Math.random()-0.5)*jit*0.3
+  }));
+}
+
+function drawDesk(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 3;
+  if(!deskBorderPts) deskBorderPts = generateDeskBorder(deskMargin, deskMargin, W-deskMargin*2, H-deskMargin*2, 6);
+  ctx.beginPath();
+  deskBorderPts.forEach((p,idx)=>{ if(idx===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
+  ctx.stroke();
+  // wood grain hand lines
+  ctx.strokeStyle = 'rgba(26,26,26,0.18)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<6;i++){
+    const y = deskMargin+18 + i*((H-deskMargin*2-30)/6);
+    ctx.beginPath();
+    ctx.moveTo(deskMargin+10, y);
+    for(let x=deskMargin+10;x<W-deskMargin-10;x+=24){
+      ctx.lineTo(x+12, y + Math.sin(x*0.05+i)*3.5);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawEraser(e){
+  if(!e.alive) return;
+  const b = e.body;
+  const style = ERASER_STYLE[e.id % 4];
+  ctx.save();
+  ctx.translate(b.position.x, b.position.y);
+  ctx.rotate(b.angle);
+  const w=46*e.scale, h=26*e.scale;
+  const r = style.corner*e.scale;
+  ctx.lineWidth = e.id===currentTurn && !winner ? 3 : 2;
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.fillStyle = e.id===currentTurn && !winner ? 'rgba(178,58,46,0.10)' : 'rgba(26,26,26,0.04)';
+  // sketchy double-stroke rounded rect
+  for(let pass=0; pass<2; pass++){
+    ctx.beginPath();
+    const off = pass*0.8;
+    roundRectPath(-w/2+off,-h/2+off,w,h,r);
+    if(pass===0) ctx.fill();
+    ctx.stroke();
+  }
+  // 使用済み(worn)の質感: 角の欠け + うっすらとした汚れ
+  if(style.worn){
+    ctx.lineWidth = 1.1;
+    const nick = 6*e.scale;
+    ctx.beginPath();
+    ctx.moveTo(-w/2+2, -h/2+nick);
+    ctx.lineTo(-w/2+nick, -h/2+2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2-2, h/2-nick);
+    ctx.lineTo(w/2-nick, h/2-2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(26,26,26,0.07)';
+    ctx.beginPath();
+    ctx.ellipse(-w*0.08, h*0.06, w*0.22, h*0.30, 0.3, 0, 7);
+    ctx.fill();
+  }
+  // カバー(紙帯)付き: 右半分に巻いた紙スリーブ
+  if(style.cover){
+    const bandLeft = -w*0.04;
+    ctx.beginPath();
+    ctx.rect(bandLeft, -h/2, (w/2)-bandLeft, h);
+    ctx.fillStyle = 'rgba(247,245,239,0.98)';
+    ctx.fill();
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.stroke();
+    // 帯の中の印刷ライン(飾り)
+    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgba(26,26,26,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(bandLeft+w*0.08, -h*0.12);
+    ctx.lineTo(w/2-w*0.06, -h*0.12);
+    ctx.moveTo(bandLeft+w*0.08, h*0.14);
+    ctx.lineTo(w/2-w*0.10, h*0.14);
+    ctx.stroke();
+    if(style.worn){
+      // 開封済み: 帯の縁をギザギザに(破れた紙の表現)
+      ctx.beginPath();
+      ctx.moveTo(bandLeft, -h/2);
+      for(let k=0;k<4;k++){
+        const yy = -h/2 + (h/4)*(k+1);
+        const jag = bandLeft + (k%2===0 ? 3 : -3)*e.scale;
+        ctx.lineTo(jag, yy - h/8);
+        ctx.lineTo(bandLeft, yy);
+      }
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else {
+      // 未開封: 帯にもう一本のシール線
+      ctx.beginPath();
+      ctx.moveTo(bandLeft+3*e.scale, -h/2);
+      ctx.lineTo(bandLeft+3*e.scale, h/2);
+      ctx.strokeStyle = 'rgba(26,26,26,0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+  // label
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = `${12*Math.min(e.scale,1.6)}px 'Yomogi', cursive`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('P'+(e.id+1), style.cover ? -w*0.14 : 0, 1);
+  // part indicator mark
+  if(e.part!=='none'){
+    ctx.font = "9px 'Zen Kurenaido', sans-serif";
+    ctx.fillText(PARTS[e.part].label.slice(0,4), 0, h/2+9);
+  }
+  ctx.restore();
+}
+function roundRectPath(x,y,w,h,r){
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawAim(){
+  if(!dragging) return;
+  const b = dragging.eraser.body;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(178,58,46,0.8)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([6,5]);
+  ctx.beginPath();
+  ctx.moveTo(b.position.x, b.position.y);
+  ctx.lineTo(dragging.curX, dragging.curY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // power indicator arrow back
+  const dx = b.position.x - dragging.curX, dy = b.position.y - dragging.curY;
+  const dist = Math.min(Math.hypot(dx,dy), 90);
+  const ang = Math.atan2(dy,dx);
+  const tipX = b.position.x + Math.cos(ang)*dist*0.9;
+  const tipY = b.position.y + Math.sin(ang)*dist*0.9;
+  ctx.fillStyle = 'rgba(178,58,46,0.8)';
+  ctx.beginPath();
+  ctx.arc(tipX,tipY,4,0,7);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHoles(){
+  holes.forEach(h=>{
+    const style = HOLE_STYLE[h.ownerId % 4];
+    ctx.save();
+    ctx.translate(h.x, h.y);
+
+    if(style.fill==='hatch'){
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0,0,h.r,0,7);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(247,245,239,1)';
+      ctx.fillRect(-h.r,-h.r,h.r*2,h.r*2);
+      ctx.strokeStyle = 'rgba(26,26,26,0.8)';
+      ctx.lineWidth = 2;
+      for(let d=-h.r*2; d<h.r*2; d+=7){
+        ctx.beginPath();
+        ctx.moveTo(d,-h.r);
+        ctx.lineTo(d+h.r*2,h.r);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      const grad = ctx.createRadialGradient(0,0,0,0,0,h.r);
+      grad.addColorStop(0,'rgba(26,26,26,0.95)');
+      grad.addColorStop(1,'rgba(26,26,26,0.55)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0,0,h.r,0,7);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(0,0,h.r,0,7);
+    if(style.rim==='dashed'){
+      ctx.setLineDash([5,4]);
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+    } else if(style.rim==='white'){
+      ctx.strokeStyle = '#f7f5ef';
+      ctx.lineWidth = 3;
+    } else {
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  });
+}
+
+function loop(){
+  Engine.update(engine, 1000/60);
+  drawDesk();
+  drawHoles();
+  drawObstacles();
+  erasers.forEach(drawEraser);
+  drawAim();
+  if(!winner) requestAnimationFrame(loop);
+}
+
+/* ---- input (turn-based drag slingshot) ---- */
+function attachInput(){
+  const getPos = (evt)=>{
+    const rect = canvas.getBoundingClientRect();
+    const cx = evt.touches ? evt.touches[0].clientX : evt.clientX;
+    const cy = evt.touches ? evt.touches[0].clientY : evt.clientY;
+    return { x: (cx-rect.left)*(W/rect.width), y: (cy-rect.top)*(H/rect.height) };
+  };
+  canvas.addEventListener('pointerdown', (evt)=>{
+    if(inputLocked || winner) return;
+    const cur = erasers[currentTurn];
+    if(cur.isCPU || !cur.alive) return;
+    const p = getPos(evt);
+    const d = Math.hypot(p.x-cur.body.position.x, p.y-cur.body.position.y);
+    if(d < 40){
+      dragging = { eraser:cur, curX:p.x, curY:p.y };
+    }
+  });
+  canvas.addEventListener('pointermove', (evt)=>{
+    if(!dragging) return;
+    const p = getPos(evt);
+    dragging.curX = p.x; dragging.curY = p.y;
+  });
+  canvas.addEventListener('pointerup', ()=>{
+    if(!dragging) return;
+    const cur = dragging.eraser;
+    const b = cur.body;
+    let dx = b.position.x - dragging.curX;
+    let dy = b.position.y - dragging.curY;
+    let dist = Math.hypot(dx,dy);
+    dist = Math.min(dist, 70);
+    if(dist > 8){
+      launchEraser(cur, dx, dy, dist);
+    }
+    dragging = null;
+  });
+}
+
+function useSpecial(cur, tier){
+  const spec = SPECIALS[cur.part][tier];
+  if(!spec || cur.bp < spec.cost) return false;
+  if(cur.part==='none' && cur.bigStage>=2) return false; // 最大サイズ到達後は再使用不可
+  cur.bp -= spec.cost;
+  attackerId = cur.id;
+  hitOpponentsThisTurn = new Set();
+
+  if(cur.part==='none'){
+    let target = spec.targetScale;
+    let displayName = spec.name;
+    if(tier==='small' && cur.bigStage>=1){
+      // 2回目のBIG消しは超BIG消しと同じ大きさまで育つ
+      target = SPECIALS.none.big.targetScale;
+      displayName = SPECIALS.none.big.name;
+    }
+    scaleEraser(cur, target);
+    cur.bigStage = target>=SPECIALS.none.big.targetScale ? 2 : 1;
+    triggerManga(displayName, {x:cur.body.position.x, y:cur.body.position.y});
+    // BIG系はサイズ変化のみで手番を消費しない→この後そのまま弾ける
+    refreshBpRow();
+    refreshSpecialBar();
+    return true;
+  } else if(cur.part==='stapler'){
+    typhoonBlast(cur, spec.pct, spec.mode);
+    triggerManga(spec.name, {x:cur.body.position.x, y:cur.body.position.y});
+  } else if(cur.part==='sandpaper'){
+    createHoles(cur, spec.holeCount);
+    triggerManga(spec.name, {x:cur.body.position.x, y:cur.body.position.y});
+  }
+
+  inputLocked = true;
+  awaitingSettle = true;
+  settleStartTime = Date.now();
+  refreshSpecialBar();
+  return true;
+}
+
+const BIG_STAGE_PIPS = { control:6, speed:4, weight:4, friction:4 };
+
+function scaleEraser(cur, targetScale){
+  const factor = targetScale / cur.scale;
+  Body.scale(cur.body, factor, factor);
+  cur.scale = targetScale;
+  cur.atkMult = targetScale;            // 大きさ=攻撃力の倍率として使用
+
+  // BIG消しの新ステータス(操作性MAX/速さ・重さ・摩擦アップ)を反映
+  const stats = deriveStats(BIG_STAGE_PIPS);
+  cur.kick = stats.kick;
+  cur.inaccuracy = stats.inaccuracy;
+  cur.body.frictionAir = stats.frictionAir;
+  const targetMass = stats.density * 46 * 26; // サイズに関係なく基準サイズでの重さクラスとして計算
+  Body.setMass(cur.body, targetMass);
+  cur.baseMass = targetMass;
+}
+
+function typhoonBlast(cur, pct, mode){
+  const origin = cur.body.position;
+  const others = [
+    ...erasers.filter(e=>e.alive && e.id!==cur.id).map(e=>({ body:e.body, isEraser:true })),
+    ...obstacles.map(o=>({ body:o.body, isEraser:false }))
+  ];
+  others.forEach(t=>{
+    const dx = t.body.position.x - origin.x;
+    const dy = t.body.position.y - origin.y;
+    const dist = Math.hypot(dx,dy) || 1;
+    let inRange = true;
+    if(mode==='contact'){
+      inRange = dist < 95; // 「接触している」範囲の近似
+    }
+    if(!inRange) return;
+    const power = BLAST_MAX * pct;
+    Body.applyForce(t.body, t.body.position, { x:(dx/dist)*power, y:(dy/dist)*power });
+    Body.setAngularVelocity(t.body, t.body.angularVelocity + (Math.random()-0.5)*0.1);
+  });
+}
+
+function createHoles(cur, count){
+  const innerX = deskMargin+50, innerY = deskMargin+50;
+  const innerW = W-deskMargin*2-100, innerH = H-deskMargin*2-100;
+  for(let k=0;k<count;k++){
+    let x,y,tries=0, ok=false;
+    do{
+      x = innerX + Math.random()*innerW;
+      y = innerY + Math.random()*innerH;
+      ok = holes.every(h=>Math.hypot(h.x-x,h.y-y) > 55) &&
+           erasers.every(e=>!e.alive || Math.hypot(e.body.position.x-x,e.body.position.y-y) > 45);
+      tries++;
+    } while(!ok && tries<20);
+    holes.push({ x, y, r:26, ownerId:cur.id });
+  }
+}
+
+function checkHoles(){
+  erasers.forEach(e=>{
+    if(!e.alive) return;
+    holes.forEach(h=>{
+      if(h.ownerId===e.id) return;
+      const d = Math.hypot(e.body.position.x-h.x, e.body.position.y-h.y);
+      if(d < h.r){
+        e.alive = false;
+        World.remove(world, e.body);
+        triggerManga('穴に落ちた!', {x:h.x, y:h.y});
+      }
+    });
+  });
+}
+
+function launchEraser(cur, dirX, dirY, dist){
+  attackerId = cur.id;
+  hitOpponentsThisTurn = new Set();
+  const b = cur.body;
+  const baseAngle = Math.atan2(dirY, dirX);
+  const dev = (Math.random()-0.5) * 2 * cur.inaccuracy;
+  const angle = baseAngle + dev;
+  const power = dist * 0.00105 * cur.kick;
+  Body.applyForce(b, b.position, { x: Math.cos(angle)*power, y: Math.sin(angle)*power });
+  Body.setAngularVelocity(b, (Math.random()-0.5)*0.05*(dist/70) + dev*0.3);
+  triggerManga(pick(['パンッ!','シュッ!','ビュン!']), {x:b.position.x, y:b.position.y}, 'launch');
+  inputLocked = true;
+  awaitingSettle = true;
+  settleStartTime = Date.now();
+  refreshSpecialBar();
+}
+
+function checkFallen(){
+  erasers.forEach(e=>{
+    if(!e.alive) return;
+    const {x,y} = e.body.position;
+    if(x < deskMargin-6 || x > W-deskMargin+6 || y < deskMargin-6 || y > H-deskMargin+6){
+      e.alive = false;
+      World.remove(world, e.body);
+      triggerManga('オチた…', {x: Math.max(deskMargin,Math.min(W-deskMargin,x)), y: Math.max(deskMargin,Math.min(H-deskMargin,y))});
+    }
+  });
+  checkHoles();
+  checkWinOrAdvance();
+}
+
+function checkWinOrAdvance(){
+  if(winner) return;
+  const alive = erasers.filter(e=>e.alive);
+  if(alive.length <= 1){
+    winner = alive[0] || null;
+    setTimeout(showEnd, 700);
+    return;
+  }
+  if(awaitingSettle){
+    const boardSettled = alive.every(e=>
+      Math.hypot(e.body.velocity.x,e.body.velocity.y) < 0.05 && Math.abs(e.body.angularVelocity)<0.01
+    ) && obstacles.every(o=>
+      Math.hypot(o.body.velocity.x,o.body.velocity.y) < 0.05 && Math.abs(o.body.angularVelocity)<0.01
+    );
+    const minTimePassed = (Date.now() - settleStartTime) > 500;
+    if(boardSettled && minTimePassed){
+      awaitingSettle = false;
+      inputLocked = false;
+      advanceTurn();
+    }
+  }
+}
+
+function updateTurnLabel(){
+  const cur = erasers[currentTurn];
+  document.getElementById('turnLabel').textContent = `P${cur.id+1}のばん` + (cur.isCPU?'（CPU）':'');
+  document.getElementById('hint').textContent = cur.isCPU ? 'CPUが考え中…' : '自分の消しゴムを指で引っぱって離す';
+  refreshBpRow();
+  refreshSpecialBar();
+}
+
+function refreshBpRow(){
+  const row = document.getElementById('bpRow');
+  row.innerHTML = erasers.map(e=>{
+    if(!e.alive) return '';
+    return `<div>P${e.id+1} BP <span class="bp-pips">${pipStr(e.bp)}</span></div>`;
+  }).join('');
+}
+
+function refreshSpecialBar(){
+  const bar = document.getElementById('specialBar');
+  bar.innerHTML = '';
+  const cur = erasers[currentTurn];
+  if(!cur || cur.isCPU || winner || inputLocked) return;
+  const spec = SPECIALS[cur.part];
+  const maxedOut = cur.part==='none' && cur.bigStage>=2;
+  ['small','big'].forEach(tier=>{
+    const s = spec[tier];
+    const btn = document.createElement('button');
+    btn.textContent = `${s.name}(${s.cost}BP)`;
+    btn.disabled = cur.bp < s.cost || maxedOut;
+    btn.onclick = ()=>{ if(useSpecial(cur, tier)) refreshSpecialBar(); };
+    bar.appendChild(btn);
+  });
+}
+
+function advanceTurn(){
+  do{
+    currentTurn = (currentTurn+1) % erasers.length;
+  } while(!erasers[currentTurn].alive);
+  updateTurnLabel();
+  const cur = erasers[currentTurn];
+  if(cur.isCPU) setTimeout(()=>cpuMove(cur), 550);
+}
+
+function cpuMove(cur){
+  if(winner) return;
+  const spec = SPECIALS[cur.part];
+  let usedSpecial = false;
+  if(cur.bp >= spec.big.cost && Math.random() < 0.6){
+    usedSpecial = useSpecial(cur, 'big');
+  } else if(cur.bp >= spec.small.cost && Math.random() < 0.4){
+    usedSpecial = useSpecial(cur, 'small');
+  }
+  if(usedSpecial && cur.part!=='none') return; // 攻撃技/穴はそれで手番終了
+  const targets = erasers.filter(e=>e.alive && e.id!==cur.id);
+  if(targets.length===0) return;
+  const target = pick(targets);
+  const b = cur.body;
+  let dx = target.body.position.x - b.position.x;
+  let dy = target.body.position.y - b.position.y;
+  const ang = Math.atan2(dy,dx) + (Math.random()-0.5)*0.15; // small CPU targeting imprecision
+  const dist = 40 + Math.random()*25;
+  launchEraser(cur, Math.cos(ang), Math.sin(ang), dist);
+}
+
+/* ---- manga flash overlay ---- */
+function burstPath(w, h, spikes){
+  const cx=w/2, cy=h/2;
+  const rxO=w/2, ryO=h/2;
+  const rxI=w*0.36, ryI=h*0.32;
+  let d = '';
+  for(let i=0;i<spikes*2;i++){
+    const ang = (Math.PI*2*i)/(spikes*2) - Math.PI/2;
+    const outer = i%2===0;
+    const rx = outer?rxO:rxI, ry = outer?ryO:ryI;
+    const jitter = 1 + (Math.random()-0.5)*0.10;
+    const x = cx + Math.cos(ang)*rx*jitter;
+    const y = cy + Math.sin(ang)*ry*jitter;
+    d += (i===0?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+  }
+  return d + 'Z';
+}
+
+function triggerManga(text, pos, kind='hit'){
+  const wrap = document.getElementById('canvasWrap');
+  const flash = document.createElement('div');
+  flash.className = 'manga-flash';
+  flash.style.left = (pos.x/W*100)+'%';
+  flash.style.top = (pos.y/H*100)+'%';
+
+  let bgHTML = '';
+  if(kind==='hit'){
+    bgHTML = `<svg class="rays" viewBox="0 0 200 200">
+      ${Array.from({length:16}).map((_,i)=>{
+        const a = i*(360/16)*Math.PI/180;
+        const x2 = 100+Math.cos(a)*95, y2=100+Math.sin(a)*95;
+        return `<line x1="100" y1="100" x2="${x2}" y2="${y2}" stroke="#1a1a1a" stroke-width="2" opacity="0.5"/>`;
+      }).join('')}
+    </svg>`;
+  } else if(kind==='launch'){
+    bgHTML = `<svg class="smoke" viewBox="0 0 200 200">
+      <circle cx="100" cy="114" r="30" fill="rgba(26,26,26,0.11)"/>
+      <circle cx="76" cy="102" r="22" fill="rgba(26,26,26,0.09)"/>
+      <circle cx="124" cy="104" r="24" fill="rgba(26,26,26,0.09)"/>
+      <circle cx="100" cy="82" r="18" fill="rgba(26,26,26,0.08)"/>
+      <circle cx="86" cy="76" r="12" fill="rgba(26,26,26,0.07)"/>
+      <circle cx="114" cy="74" r="13" fill="rgba(26,26,26,0.07)"/>
+    </svg>`;
+  }
+
+  const bw = Math.max(120, text.length*28), bh = 76;
+  const path = burstPath(bw, bh, 13);
+
+  flash.innerHTML = `
+    ${bgHTML}
+    <div class="manga-burst">
+      <svg width="${bw}" height="${bh}" viewBox="0 0 ${bw} ${bh}">
+        <path d="${path}" fill="#f7f5ef" stroke="#1a1a1a" stroke-width="3" stroke-linejoin="round"/>
+      </svg>
+      <span class="manga-text">${text}</span>
+    </div>
+  `;
+
+  wrap.appendChild(flash);
+  requestAnimationFrame(()=> flash.classList.add('show'));
+  setTimeout(()=> flash.remove(), 600);
+}
+
+function showEnd(){
+  const overlay = document.getElementById('endOverlay');
+  document.getElementById('winnerText').textContent = winner ? `P${winner.id+1}のかち!!` : 'ひきわけ…';
+  overlay.classList.add('show');
+}
+</script>
+</body>
+</html>
