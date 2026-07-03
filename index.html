@@ -941,7 +941,7 @@ function scaleEraser(cur, targetScale){
   Body.scale(cur.body, factor, factor);
   cur.scale = targetScale;
   cur.atkMult = targetScale;            // 大きさ=攻撃力の倍率として使用
-  cur.bigPct = targetScale >= SPECIALS.none.big.targetScale ? 0.55 : 0.486; // 超BIG消し55% / BIG消し48.6%(超台風消しと同値)
+  cur.bigPct = targetScale >= SPECIALS.none.big.targetScale ? 0.605 : 0.5346; // 超BIG消し60.5% / BIG消し53.46%
 
   // BIG消しの新ステータス(操作性MAX/速さ・重さ・摩擦アップ)を反映
   const stats = deriveStats(BIG_STAGE_PIPS);
