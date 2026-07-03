@@ -43,63 +43,63 @@
 
   h1.title{
     font-family:'Yomogi', cursive;
-    font-size:clamp(28px,7vw,54px);
+    font-size:clamp(32px,9vw,56px);
     letter-spacing:2px;
     margin:6px 0 2px 0;
     transform:rotate(-1deg);
   }
   .sub{
-    font-size:13px; color:#555; margin-bottom:14px;
+    font-size:clamp(13px,3.6vw,16px); color:#555; margin-bottom:18px;
   }
 
   /* --- setup screen --- */
   .setup-box{
     background:var(--paper);
     border:2px solid var(--ink);
-    border-radius:6px;
-    padding:14px 18px;
-    width:min(560px,94vw);
-    max-height:78vh;
+    border-radius:8px;
+    padding:clamp(16px,4.5vw,26px) clamp(18px,5.5vw,32px);
+    width:min(620px,95vw);
+    max-height:82vh;
     overflow-y:auto;
-    box-shadow:4px 4px 0 var(--ink);
+    box-shadow:5px 5px 0 var(--ink);
   }
   .player-row{
-    display:flex; align-items:center; gap:8px;
+    display:flex; align-items:center; gap:clamp(8px,2.5vw,14px);
     border-top:1.5px dashed #999;
-    padding:8px 0;
+    padding:clamp(10px,3vw,16px) 0;
   }
   .player-row:first-child{ border-top:none; }
   .player-tag{
     font-family:'Yomogi', cursive;
-    font-size:18px; width:54px; flex-shrink:0;
+    font-size:clamp(18px,5vw,24px); width:clamp(54px,13vw,68px); flex-shrink:0;
   }
   select, button{
     font-family:'Zen Kurenaido', sans-serif;
-    font-size:13px;
+    font-size:clamp(14px,3.8vw,17px);
     border:1.5px solid var(--ink);
-    border-radius:4px;
+    border-radius:5px;
     background:var(--paper);
-    padding:5px 7px;
+    padding:clamp(7px,2vw,10px) clamp(8px,2.2vw,12px);
     cursor:pointer;
   }
   select{ flex:1; min-width:0; }
   .part-desc{
-    font-size:11px; color:#666; width:100%; margin-top:2px; line-height:1.4;
+    font-size:clamp(12px,3.3vw,14px); color:#666; width:100%; margin-top:4px; line-height:1.5;
   }
   .part-stats{
-    width:100%; margin-top:4px;
-    font-size:11px; line-height:1.6;
-    display:grid; grid-template-columns:auto 1fr; gap:0 8px;
+    width:100%; margin-top:6px;
+    font-size:clamp(12px,3.3vw,14px); line-height:1.8;
+    display:grid; grid-template-columns:auto 1fr; gap:0 10px;
   }
   .part-stats .stat-label{ color:#555; white-space:nowrap; }
-  .part-stats .stat-pips{ letter-spacing:1px; }
-  .count-row{ display:flex; gap:8px; align-items:center; margin-bottom:10px; }
-  .count-row button{ width:34px; height:34px; font-size:16px; }
+  .part-stats .stat-pips{ letter-spacing:2px; }
+  .count-row{ display:flex; gap:10px; align-items:center; margin-bottom:14px; }
+  .count-row button{ width:clamp(34px,9vw,44px); height:clamp(34px,9vw,44px); font-size:clamp(16px,4.2vw,20px); }
   .big-btn{
-    margin-top:14px;
+    margin-top:18px;
     font-family:'Yomogi', cursive;
-    font-size:20px;
-    padding:10px 26px;
+    font-size:clamp(20px,5.5vw,26px);
+    padding:clamp(12px,3.2vw,16px) clamp(26px,7vw,38px);
     background:var(--ink);
     color:var(--paper);
     box-shadow:3px 3px 0 var(--accent);
