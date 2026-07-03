@@ -5,6 +5,12 @@
 <title>消しゴム合戦</title>
 <link href="https://fonts.googleapis.com/css2?family=Yomogi&family=Zen+Kurenaido&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<!-- Google AdSense / H5 Games Ads (Ad Placement API) -->
+<script async data-ad-frequency-hint="90s" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9638776464320023" crossorigin="anonymous"></script>
+<script>
+  window.adsbygoogle = window.adsbygoogle || [];
+  var adBreak = adConfig = function(o){ adsbygoogle.push(o); };
+</script>
 <style>
   :root{
     --ink:#1a1a1a;
@@ -408,6 +414,12 @@ Object.entries(STAGES).forEach(([k,v])=>{
 stageSelectEl.value = currentStage;
 stageSelectEl.addEventListener('change', ()=>{ currentStage = stageSelectEl.value; });
 
+function showAdBreak(name){
+  try{
+    adBreak({ type:'next', name:name });
+  }catch(e){ /* 広告APIがまだ準備できていない場合は無視 */ }
+}
+
 document.getElementById('startBtn').onclick = ()=>{
   document.getElementById('setupScreen').classList.remove('active');
   document.getElementById('gameScreen').classList.add('active');
@@ -417,10 +429,12 @@ document.getElementById('quitBtn').onclick = ()=>{
   location.reload();
 };
 document.getElementById('restartBtn').onclick = ()=>{
+  showAdBreak('restart-same-settings');
   document.getElementById('endOverlay').classList.remove('show');
   initGame();
 };
 document.getElementById('restartFreshBtn').onclick = ()=>{
+  showAdBreak('restart-to-setup');
   location.reload();
 };
 
